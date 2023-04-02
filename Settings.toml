@@ -1,0 +1,7 @@
+# Window
+window_width = 1000
+window_height = 800
+
+# Game
+starting_health = 100
+starting_resolve = 100
