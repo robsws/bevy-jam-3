@@ -1,26 +1,25 @@
 use bevy::prelude::*;
-use config::Config;
+use inner::CardGamePlugin;
 
-#[derive(Resource)]
-struct Settings(Config);
+mod inner;
+mod settings;
+
+use settings::Settings;
 
 fn main() {
-    let config = Config::builder()
-        .add_source(config::File::with_name("Settings"))
-        .build()
-        .unwrap();
-
+    let settings = Settings::from_config();
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Inner Demons".into(),
-                resolution: (1000., 800.).into(),
+                resolution: (settings.window.width, settings.window.height).into(),
                 fit_canvas_to_parent: true,
                 prevent_default_event_handling: false,
                 ..default()
             }),
             ..default()
         }))
-        .insert_resource(Settings(config))
+        .insert_resource(settings)
+        .add_plugin(CardGamePlugin)
         .run();
 }

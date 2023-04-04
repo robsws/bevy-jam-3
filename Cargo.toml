@@ -7,8 +7,10 @@ edition = "2021"
 
 # Remove dynamic linking before release
 [dependencies]
-bevy = { version = "0.10.0", features = ["dynamic_linking"] }
+bevy = { version = "0.10.1", features = ["dynamic_linking"] }
 config = { version = "0.13.3" }
+rand = { version = "0.8.5" }
+bevy_mod_debugdump = { version = "0.7.0" }
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]

@@ -1,7 +1,11 @@
 # Window
-window_width = 1000
-window_height = 800
+window__width = 1000
+window__height = 800
 
-# Game
-starting_health = 100
-starting_resolve = 100
+# Outer game
+game__outer__starting_health = 100
+
+# Inner game
+game__inner__starting_resolve = 100
+game__inner__starting_demon_power = 5
+game__inner__starting_demon_stun_time = 0
