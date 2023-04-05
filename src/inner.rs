@@ -9,7 +9,8 @@ impl Plugin for CardGamePlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<CardGameEvent>()
             .add_startup_system(model::setup)
-            .add_startup_system(view::setup);
+            .add_startup_system(view::setup)
+            .add_system(view::card_interaction);
     }
 }
 
@@ -33,10 +34,13 @@ mod view {
     use super::model;
 
     #[derive(Resource, Clone)]
-    struct CardImageHandles {
+    pub struct CardImageHandles {
         back: Handle<Image>,
+        back_hover: Handle<Image>,
         inspired: Handle<Image>,
+        inspired_hover: Handle<Image>,
         peaceful: Handle<Image>,
+        peaceful_hover: Handle<Image>,
     }
 
     #[derive(Resource, Clone)]
@@ -56,18 +60,15 @@ mod view {
     #[derive(Component)]
     struct PlayArea;
 
-    #[derive(Bundle)]
-    struct CardBundle {
-        model: model::Card,
-        image: ImageBundle,
-    }
-
     pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         // Load images
         let card_image_handles = CardImageHandles {
             back: asset_server.load("images/back.png"),
+            back_hover: asset_server.load("images/back_inverted.png"),
             inspired: asset_server.load("images/inspired.png"),
+            inspired_hover: asset_server.load("images/inspired_inverted.png"),
             peaceful: asset_server.load("images/peaceful.png"),
+            peaceful_hover: asset_server.load("images/peaceful_inverted.png"),
         };
         commands.insert_resource(card_image_handles.clone());
         // Load fonts
@@ -187,7 +188,35 @@ mod view {
             },
             ..default()
         };
-        hand_area.spawn((card, kind));
+        hand_area.spawn((card, model::Card { kind }));
+    }
+
+    pub fn card_interaction(
+        mut q_interaction: Query<
+            (&Interaction, &mut UiImage, &model::Card),
+            (Changed<Interaction>, With<Button>),
+        >,
+        card_image_handles: Res<CardImageHandles>,
+    ) {
+        for (interaction, mut image, card) in &mut q_interaction {
+            match *interaction {
+                Interaction::Clicked => todo!(),
+                Interaction::Hovered => {
+                    image.texture = match card.kind {
+                        model::CardKind::Peaceful => card_image_handles.peaceful_hover.clone(),
+                        model::CardKind::Inspired => card_image_handles.inspired_hover.clone(),
+                        _ => card_image_handles.back_hover.clone(),
+                    }
+                }
+                Interaction::None => {
+                    image.texture = match card.kind {
+                        model::CardKind::Peaceful => card_image_handles.peaceful.clone(),
+                        model::CardKind::Inspired => card_image_handles.inspired.clone(),
+                        _ => card_image_handles.back.clone(),
+                    }
+                }
+            }
+        }
     }
 }
 
