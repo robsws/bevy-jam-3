@@ -1,7 +1,6 @@
-use crate::settings::Settings;
 use bevy::prelude::*;
 
-use self::model::{CardGameModel, CardKind, DemonKind};
+use self::model::{CardKind, DemonKind};
 
 pub struct CardGamePlugin;
 
@@ -10,7 +9,7 @@ impl Plugin for CardGamePlugin {
         app.add_event::<CardGameEvent>()
             .add_startup_system(model::setup)
             .add_startup_system(view::setup)
-            .add_system(view::card_interaction);
+            .add_system(view::hand_card_interaction);
     }
 }
 
@@ -29,18 +28,19 @@ pub enum CardGameEvent {
 
 mod view {
 
+    use std::collections::HashMap;
+
     use bevy::prelude::*;
 
     use super::model;
 
     #[derive(Resource, Clone)]
-    pub struct CardImageHandles {
-        back: Handle<Image>,
-        back_hover: Handle<Image>,
-        inspired: Handle<Image>,
-        inspired_hover: Handle<Image>,
-        peaceful: Handle<Image>,
-        peaceful_hover: Handle<Image>,
+    pub struct CardPrefabs(HashMap<model::CardKind, Card>);
+
+    impl CardPrefabs {
+        pub fn new() -> CardPrefabs {
+            CardPrefabs(HashMap::new())
+        }
     }
 
     #[derive(Resource, Clone)]
@@ -48,29 +48,76 @@ mod view {
         regular: Handle<Font>,
     }
 
-    #[derive(Component)]
-    struct DeckArea;
+    #[derive(Component, Clone)]
+    pub struct Card {
+        model: model::Card,
+        image_handles: CardImageHandles,
+    }
+
+    #[derive(Bundle)]
+    struct CardBundle {
+        prefab: Card,
+        view: ButtonBundle,
+    }
+
+    #[derive(Clone)]
+    struct CardImageHandles {
+        face_up: Handle<Image>,
+        face_down: Handle<Image>,
+        hover: Handle<Image>,
+    }
 
     #[derive(Component)]
-    struct HandArea;
+    pub struct DeckArea;
 
     #[derive(Component)]
-    struct DiscardArea;
+    pub struct HandArea;
 
     #[derive(Component)]
-    struct PlayArea;
+    pub struct DiscardArea;
+
+    #[derive(Component)]
+    pub struct PlayArea;
 
     pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         // Load images
-        let card_image_handles = CardImageHandles {
-            back: asset_server.load("images/back.png"),
-            back_hover: asset_server.load("images/back_inverted.png"),
-            inspired: asset_server.load("images/inspired.png"),
-            inspired_hover: asset_server.load("images/inspired_inverted.png"),
-            peaceful: asset_server.load("images/peaceful.png"),
-            peaceful_hover: asset_server.load("images/peaceful_inverted.png"),
-        };
-        commands.insert_resource(card_image_handles.clone());
+        let img_card_back = asset_server.load("images/back.png");
+        let img_card_inspired = asset_server.load("images/inspired.png");
+        let img_card_inspired_hover = asset_server.load("images/inspired_hover.png");
+        let img_card_peaceful = asset_server.load("images/peaceful.png");
+        let img_card_peaceful_hover = asset_server.load("images/peaceful_hover.png");
+
+        // Initialise card prefabs
+        let mut card_prefabs = CardPrefabs::new();
+        // Inspired card
+        card_prefabs.0.insert(
+            model::CardKind::Inspired,
+            Card {
+                model: model::Card {
+                    kind: model::CardKind::Inspired,
+                },
+                image_handles: CardImageHandles {
+                    face_up: img_card_inspired.clone(),
+                    face_down: img_card_back.clone(),
+                    hover: img_card_inspired_hover.clone(),
+                },
+            },
+        );
+        // Peaceful card
+        card_prefabs.0.insert(
+            model::CardKind::Peaceful,
+            Card {
+                model: model::Card {
+                    kind: model::CardKind::Peaceful,
+                },
+                image_handles: CardImageHandles {
+                    face_up: img_card_peaceful.clone(),
+                    face_down: img_card_back.clone(),
+                    hover: img_card_peaceful_hover.clone(),
+                },
+            },
+        );
+        commands.insert_resource(card_prefabs.clone());
         // Load fonts
         let font_handles = FontHandles {
             regular: asset_server.load("fonts/Kenney High.ttf"),
@@ -78,21 +125,17 @@ mod view {
         commands.insert_resource(font_handles.clone());
         // Init UI
         commands.spawn(Camera2dBundle::default());
-        setup_ui(&mut commands, &card_image_handles, &font_handles);
+        setup_ui(&mut commands, &card_prefabs, &font_handles);
     }
 
-    fn setup_ui(
-        commands: &mut Commands,
-        card_image_handles: &CardImageHandles,
-        font_handles: &FontHandles,
-    ) {
+    fn setup_ui(commands: &mut Commands, card_prefabs: &CardPrefabs, font_handles: &FontHandles) {
         // Root node of layout
         commands
             .spawn(NodeBundle {
                 style: Style {
                     size: Size::width(Val::Percent(100.0)),
                     flex_direction: FlexDirection::ColumnReverse,
-                    justify_content: JustifyContent::FlexEnd,
+                    justify_content: JustifyContent::End,
                     ..default()
                 },
                 ..default()
@@ -101,7 +144,7 @@ mod view {
                 // Hand, deck and discard pile area
                 root.spawn(NodeBundle {
                     style: Style {
-                        size: Size::height(Val::Px(260.0)),
+                        size: Size::height(Val::Px(138.0)),
                         justify_content: JustifyContent::SpaceBetween,
                         ..default()
                     },
@@ -112,7 +155,7 @@ mod view {
                     // Deck area
                     dock.spawn(NodeBundle {
                         style: Style {
-                            size: Size::width(Val::Px(150.0)),
+                            size: Size::width(Val::Px(100.0)),
                             justify_content: JustifyContent::Center,
                             ..default()
                         },
@@ -135,15 +178,14 @@ mod view {
                         for _ in 0..3 {
                             create_card_in_hand(
                                 hand,
-                                model::CardKind::Inspired,
-                                card_image_handles,
+                                card_prefabs.0.get(&model::CardKind::Inspired).unwrap(),
                             );
                         }
                     });
                     // Discard pile area
                     dock.spawn(NodeBundle {
                         style: Style {
-                            size: Size::width(Val::Px(150.0)),
+                            size: Size::width(Val::Px(100.0)),
                             justify_content: JustifyContent::Center,
                             ..default()
                         },
@@ -152,71 +194,96 @@ mod view {
                     })
                     .insert(DiscardArea);
                 });
+                // HUD area 1
+                root.spawn(NodeBundle {
+                    style: Style {
+                        size: Size::height(Val::Px(30.0)),
+                        ..default()
+                    },
+                    background_color: Color::rgb(0.3, 0.1, 0.7).into(),
+                    ..default()
+                });
                 // Play area
                 root.spawn(NodeBundle {
                     style: Style {
-                        size: Size::height(Val::Percent(100.0)),
+                        size: Size::height(Val::Px(138.0)),
+                        justify_content: JustifyContent::Center,
                         ..default()
                     },
-                    background_color: Color::rgb(0.2, 0.2, 0.2).into(),
+                    background_color: Color::rgb(0.1, 0.1, 0.1).into(),
+                    ..default()
+                })
+                .insert(PlayArea);
+                // HUD area 2
+                root.spawn(NodeBundle {
+                    style: Style {
+                        size: Size::height(Val::Px(30.0)),
+                        ..default()
+                    },
+                    background_color: Color::rgb(0.3, 0.1, 0.7).into(),
+                    ..default()
+                });
+                // Demon area
+                root.spawn(NodeBundle {
+                    style: Style {
+                        size: Size::height(Val::Px(400.0)),
+                        ..default()
+                    },
+                    background_color: Color::rgb(0.8, 0.8, 0.8).into(),
                     ..default()
                 });
             });
     }
 
-    fn create_card_in_hand(
-        hand_area: &mut ChildBuilder,
-        kind: model::CardKind,
-        card_image_handles: &CardImageHandles,
-    ) {
-        let card = ButtonBundle {
-            style: Style {
-                size: Size::new(Val::Px(128.0), Val::Px(256.0)),
-                margin: UiRect {
-                    left: Val::Px(5.0),
+    fn create_card_in_hand(hand_area: &mut ChildBuilder, prefab: &Card) {
+        let card = CardBundle {
+            prefab: prefab.clone(),
+            view: ButtonBundle {
+                style: Style {
+                    size: Size::new(Val::Px(64.0), Val::Px(128.0)),
+                    margin: UiRect {
+                        left: Val::Px(5.0),
+                        ..default()
+                    },
+                    ..default()
+                },
+                image: UiImage {
+                    texture: prefab.image_handles.face_up.clone(),
                     ..default()
                 },
                 ..default()
             },
-            image: UiImage {
-                texture: match kind {
-                    model::CardKind::Peaceful => card_image_handles.peaceful.clone(),
-                    model::CardKind::Inspired => card_image_handles.inspired.clone(),
-                    _ => card_image_handles.back.clone(),
-                },
-                ..default()
-            },
-            ..default()
         };
-        hand_area.spawn((card, model::Card { kind }));
+        hand_area.spawn(card);
     }
 
-    pub fn card_interaction(
+    pub fn hand_card_interaction(
+        mut commands: Commands,
         mut q_interaction: Query<
-            (&Interaction, &mut UiImage, &model::Card),
+            (Entity, &Interaction, &mut UiImage, &Card),
             (Changed<Interaction>, With<Button>),
         >,
-        card_image_handles: Res<CardImageHandles>,
+        mut q_play_area: Query<Entity, With<PlayArea>>,
+        mut q_hand_area: Query<Entity, With<HandArea>>,
     ) {
-        for (interaction, mut image, card) in &mut q_interaction {
+        let mut e_play_area = q_play_area.single_mut();
+        let mut e_hand_area = q_hand_area.single_mut();
+        for (e_card, interaction, mut image, card) in &mut q_interaction {
             match *interaction {
-                Interaction::Clicked => todo!(),
-                Interaction::Hovered => {
-                    image.texture = match card.kind {
-                        model::CardKind::Peaceful => card_image_handles.peaceful_hover.clone(),
-                        model::CardKind::Inspired => card_image_handles.inspired_hover.clone(),
-                        _ => card_image_handles.back_hover.clone(),
-                    }
+                Interaction::Clicked => {
+                    // Reparent the card to PlayArea
+                    reparent(&e_card, &e_hand_area, &e_play_area, &mut commands);
+                    // Do the effect of the card
                 }
-                Interaction::None => {
-                    image.texture = match card.kind {
-                        model::CardKind::Peaceful => card_image_handles.peaceful.clone(),
-                        model::CardKind::Inspired => card_image_handles.inspired.clone(),
-                        _ => card_image_handles.back.clone(),
-                    }
-                }
+                Interaction::Hovered => image.texture = card.image_handles.hover.clone(),
+                Interaction::None => image.texture = card.image_handles.face_up.clone(),
             }
         }
+    }
+
+    fn reparent(child: &Entity, from_parent: &Entity, to_parent: &Entity, commands: &mut Commands) {
+        commands.entity(*from_parent).remove_children(&[*child]);
+        commands.entity(*to_parent).push_children(&[*child]);
     }
 }
 
@@ -241,6 +308,7 @@ mod model {
     pub struct CardGameModel {
         pub demons: Vec<Demon>,
         pub player_resolve: u32,
+        pub player_defense: u32,
         pub deck: Vec<Card>,
         pub discard_pile: Vec<Card>,
         pub hand: Vec<Card>,
@@ -263,6 +331,7 @@ mod model {
                     })
                     .collect(),
                 player_resolve: settings.game.inner.starting_resolve,
+                player_defense: 0,
                 deck: starter_cards
                     .iter()
                     .map(|kind| Card { kind: *kind })
@@ -303,7 +372,6 @@ mod model {
         Doubt,
     }
 
-    #[derive(Component)]
     pub struct Demon {
         pub kind: DemonKind,
         // How much damage the demon does to Resolve at the end of the turn
@@ -312,7 +380,7 @@ mod model {
         pub stun_time: u32,
     }
 
-    #[derive(Component, Copy, Clone, Debug)]
+    #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
     pub enum CardKind {
         Angry,
         Inspired,
@@ -326,7 +394,7 @@ mod model {
         Hungover,
     }
 
-    #[derive(Component)]
+    #[derive(Clone)]
     pub struct Card {
         pub kind: CardKind,
     }
